@@ -1,0 +1,46 @@
+{
+  "name": "seatflow-api",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=24.15"
+  },
+  "scripts": {
+    "dev": "npm run build && node --watch dist/main.js",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "worker": "node dist/worker.js",
+    "migrate": "node dist/migrate.js",
+    "seed": "node dist/seed.js",
+    "test": "node --import tsx --test test/unit.test.ts",
+    "test:integration": "npm run build && node --import tsx --test --test-concurrency=1 test/integration.test.ts",
+    "test:concurrency": "node dist/concurrency.js",
+    "test:payment": "npm run build && node --import tsx --test test/payment.test.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.1.2",
+    "@nestjs/core": "12.1.2",
+    "@nestjs/platform-express": "12.1.2",
+    "@nestjs/swagger": "12.0.2",
+    "bullmq": "6.3.11",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.15.1",
+    "cookie-parser": "1.4.7",
+    "dotenv": "18.0.5",
+    "helmet": "8.3.0",
+    "ioredis": "6.0.0",
+    "pg": "8.23.1",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "1.4.10",
+    "@types/express": "5.0.6",
+    "@types/node": "26.6.4",
+    "@types/pg": "8.23.1",
+    "@types/supertest": "7.2.1",
+    "supertest": "7.3.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

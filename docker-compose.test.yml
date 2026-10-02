@@ -1,0 +1,49 @@
+name: seatflow-tests
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      {
+        POSTGRES_USER: seatflow,
+        POSTGRES_PASSWORD: test-only-password,
+        POSTGRES_DB: seatflow_test,
+      }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seatflow -d seatflow_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  tests:
+    image: node:24-alpine
+    working_dir: /app
+    volumes: ["./backend:/app", "test-node-modules:/app/node_modules"]
+    environment:
+      PGHOST: postgres
+      PGDATABASE: seatflow_test
+      PGUSER: seatflow
+      PGPASSWORD: test-only-password
+      REDIS_URL: redis://redis:6379
+      APP_ORIGIN: http://localhost:3000
+      WEBHOOK_SECRET: test-only-webhook-secret-at-least-32-characters
+      COOKIE_SECURE: "false"
+      ENABLE_SANDBOX: "true"
+      NODE_ENV: test
+      SCARF_ANALYTICS: "false"
+    command:
+      [
+        "sh",
+        "-c",
+        "npm ci --ignore-scripts --no-audit --no-fund && npm test && npm run test:payment && npm run test:integration",
+      ]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+volumes:
+  test-node-modules:

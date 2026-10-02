@@ -1,0 +1,121 @@
+name: seatflow
+x-api-env: &api-env
+  NODE_ENV: development
+  PGHOST: postgres
+  PGPORT: "5432"
+  PGDATABASE: seatflow
+  PGUSER: seatflow
+  PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  REDIS_URL: redis://redis:6379
+  APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  WEBHOOK_SECRET: ${WEBHOOK_SECRET:?Set WEBHOOK_SECRET in .env}
+  HOLD_SECONDS: ${HOLD_SECONDS:-300}
+  PAYMENT_ENVIRONMENT: ${PAYMENT_ENVIRONMENT:-sandbox}
+  PAYMENT_CALLBACK_ORIGIN: ${PAYMENT_CALLBACK_ORIGIN:-http://localhost:3000}
+  SSLCOMMERZ_ENABLED: ${SSLCOMMERZ_ENABLED:-false}
+  SSLCOMMERZ_STORE_ID: ${SSLCOMMERZ_STORE_ID:-}
+  SSLCOMMERZ_STORE_PASSWORD: ${SSLCOMMERZ_STORE_PASSWORD:-}
+  BKASH_ENABLED: ${BKASH_ENABLED:-false}
+  BKASH_USERNAME: ${BKASH_USERNAME:-}
+  BKASH_PASSWORD: ${BKASH_PASSWORD:-}
+  BKASH_APP_KEY: ${BKASH_APP_KEY:-}
+  BKASH_APP_SECRET: ${BKASH_APP_SECRET:-}
+  ENABLE_SANDBOX: ${ENABLE_SANDBOX:-true}
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: seatflow
+      POSTGRES_DB: seatflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      PGDATA: /var/lib/postgresql/data
+    volumes: ["postgres-data:/var/lib/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seatflow -d seatflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  redis:
+    image: redis:7.4-alpine
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--maxmemory-policy",
+        "noeviction",
+      ]
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    build: ./backend
+    environment: *api-env
+    command: ["node", "dist/migrate.js"]
+    depends_on:
+      postgres: { condition: service_healthy }
+  backend:
+    build: ./backend
+    environment: *api-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:5000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+  worker:
+    build: ./backend
+    environment: *api-env
+    command: ["node", "dist/worker.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+  frontend:
+    build: ./frontend
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  seed:
+    profiles: ["tools"]
+    build: ./backend
+    environment:
+      <<: *api-env
+      ALLOW_DEMO_SEED: "true"
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?Set DEMO_PASSWORD in .env}
+    command: ["node", "dist/seed.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  benchmark:
+    profiles: ["tools"]
+    build: ./backend
+    environment:
+      <<: *api-env
+      ALLOW_BENCHMARK: "true"
+    command: ["node", "dist/concurrency.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+volumes:
+  postgres-data:
+  redis-data:
